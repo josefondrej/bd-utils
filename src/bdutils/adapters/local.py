@@ -4,14 +4,35 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from bdutils.config import BdUtilsConfig
-from bdutils.exceptions import NotebookExit, SecretNotDefinedError, WidgetNotDefinedError
+from bdutils.exceptions import (
+    NotebookExit,
+    SecretNotDefinedError,
+    WidgetNotDefinedError,
+)
 from bdutils.types import FileInfo, MountInfo, SecretMetadata, SecretScope
 
 
 class _HelpMixin:
+    """Mixin to provide a help command.
+
+    Attributes:
+        _COMMANDS (Dict[str, str]): A mapping of command names to their descriptions.
+    """
+
     _COMMANDS: Dict[str, str] = {}
 
     def help(self, command: Optional[str] = None) -> str:
+        """Provide help for commands.
+
+        Args:
+            command (Optional[str]): Specific command to get help for.
+
+        Returns:
+            str: Help string for the command(s).
+
+        Raises:
+            ValueError: If an unknown command is provided.
+        """
         if command:
             if command not in self._COMMANDS:
                 raise ValueError(f"Unknown command: {command}")
@@ -20,6 +41,8 @@ class _HelpMixin:
 
 
 class LocalWidgets(_HelpMixin):
+    """Local implementation of dbutils.widgets."""
+
     _COMMANDS = {
         "combobox": "Creates a combobox input widget.",
         "dropdown": "Creates a dropdown input widget.",
@@ -37,20 +60,57 @@ class LocalWidgets(_HelpMixin):
         self._values: Dict[str, str] = {}
 
     def text(self, name: str, defaultValue: str, label: str = "") -> None:
+        """Create a text input widget.
+
+        Args:
+            name (str): Widget name.
+            defaultValue (str): Default value.
+            label (str): Optional label.
+        """
         del label
         self._values[name] = defaultValue
 
     def dropdown(self, name: str, defaultValue: str, choices: List[str], label: str = "") -> None:
+        """Create a dropdown input widget.
+
+        Args:
+            name (str): Widget name.
+            defaultValue (str): Default value.
+            choices (List[str]): List of valid choices.
+            label (str): Optional label.
+
+        Raises:
+            ValueError: If defaultValue is not in choices.
+        """
         del label
         if defaultValue not in choices:
             raise ValueError("defaultValue must be one of choices")
         self._values[name] = defaultValue
 
     def combobox(self, name: str, defaultValue: str, choices: List[str], label: str = "") -> None:
+        """Create a combobox input widget.
+
+        Args:
+            name (str): Widget name.
+            defaultValue (str): Default value.
+            choices (List[str]): List of choices.
+            label (str): Optional label.
+        """
         del label, choices
         self._values[name] = defaultValue
 
     def multiselect(self, name: str, defaultValue: str, choices: List[str], label: str = "") -> None:
+        """Create a multiselect input widget.
+
+        Args:
+            name (str): Widget name.
+            defaultValue (str): Default value (comma separated string).
+            choices (List[str]): List of valid choices.
+            label (str): Optional label.
+
+        Raises:
+            ValueError: If any chosen value is invalid.
+        """
         del label
         chosen = [v.strip() for v in defaultValue.split(",") if v.strip()]
         invalid = [v for v in chosen if v not in choices]
@@ -59,6 +119,17 @@ class LocalWidgets(_HelpMixin):
         self._values[name] = defaultValue
 
     def get(self, name: str) -> str:
+        """Retrieve the current value of a widget.
+
+        Args:
+            name (str): Widget name.
+
+        Returns:
+            str: The widget value.
+
+        Raises:
+            WidgetNotDefinedError: If the widget is not defined and no env var exists.
+        """
         if name in self._values:
             return self._values[name]
         env_key = self._config.widget_env_key(name)
@@ -70,6 +141,11 @@ class LocalWidgets(_HelpMixin):
         return value
 
     def getAll(self) -> Dict[str, str]:
+        """Retrieve all widget names and values.
+
+        Returns:
+            Dict[str, str]: Map of widget names to values.
+        """
         result = dict(self._values)
         prefix = self._config.widget_env_prefix
         for key, value in os.environ.items():
@@ -79,22 +155,39 @@ class LocalWidgets(_HelpMixin):
         return result
 
     def getArgument(self, name: str, optional: str = "") -> str:
+        """Retrieve the current value of a widget, or a default value if not defined.
+
+        Args:
+            name (str): Widget name.
+            optional (str): Default value to return if widget is not defined.
+
+        Returns:
+            str: Widget value or optional value.
+        """
         try:
             return self.get(name)
         except WidgetNotDefinedError:
             return optional
 
     def remove(self, name: str) -> None:
+        """Remove a widget.
+
+        Args:
+            name (str): Widget name.
+        """
         self._values.pop(name, None)
 
     def removeAll(self) -> None:
+        """Remove all widgets."""
         self._values.clear()
 
 
 class LocalSecrets(_HelpMixin):
+    """Local implementation of dbutils.secrets."""
+
     _COMMANDS = {
         "get": "Gets the string representation of a secret value with scope and key.",
-        "getBytes": "Gets the bytes representation of a secret value with scope and key.",
+        "getBytes": ("Gets the bytes representation of a secret value with scope and key."),
         "list": "Lists secret metadata for secrets within a scope.",
         "listScopes": "Lists secret scopes.",
     }
@@ -103,18 +196,45 @@ class LocalSecrets(_HelpMixin):
         self._config = config
 
     def get(self, scope: str, key: str) -> str:
+        """Get the string value of a secret.
+
+        Args:
+            scope (str): Secret scope.
+            key (str): Secret key.
+
+        Returns:
+            str: Secret value.
+
+        Raises:
+            SecretNotDefinedError: If the secret is not defined as an env var.
+        """
         env_key = self._config.secret_env_key(scope, key)
         value = os.environ.get(env_key)
         if value is None:
-            raise SecretNotDefinedError(
-                f"Secret '{scope}/{key}' is not defined. Expected env var '{env_key}'."
-            )
+            raise SecretNotDefinedError(f"Secret '{scope}/{key}' is not defined. Expected env var '{env_key}'.")
         return value
 
     def getBytes(self, scope: str, key: str) -> bytes:
+        """Get the byte value of a secret.
+
+        Args:
+            scope (str): Secret scope.
+            key (str): Secret key.
+
+        Returns:
+            bytes: Secret value as bytes.
+        """
         return self.get(scope, key).encode("utf-8")
 
     def list(self, scope: str) -> List[SecretMetadata]:
+        """List secret metadata in a scope.
+
+        Args:
+            scope (str): Secret scope.
+
+        Returns:
+            List[SecretMetadata]: List of secret metadata.
+        """
         prefix = f"{self._config.secret_env_prefix}{scope}__"
         out: List[SecretMetadata] = []
         for env_key in os.environ:
@@ -123,6 +243,11 @@ class LocalSecrets(_HelpMixin):
         return out
 
     def listScopes(self) -> List[SecretScope]:
+        """List available secret scopes.
+
+        Returns:
+            List[SecretScope]: List of secret scopes.
+        """
         prefix = self._config.secret_env_prefix
         scopes = set()
         for env_key in os.environ:
@@ -134,6 +259,8 @@ class LocalSecrets(_HelpMixin):
 
 
 class LocalFs(_HelpMixin):
+    """Local implementation of dbutils.fs."""
+
     _COMMANDS = {
         "cp": "Copies a file or directory, possibly across FileSystems.",
         "head": "Returns up to max_bytes bytes of a file as UTF-8.",
@@ -155,6 +282,17 @@ class LocalFs(_HelpMixin):
         self._mounts: Dict[str, MountInfo] = {}
 
     def _resolve(self, path: str) -> Path:
+        """Resolve a DBFS or file path to a local Path.
+
+        Args:
+            path (str): The path to resolve.
+
+        Returns:
+            Path: Resolved local Path object.
+
+        Raises:
+            ValueError: If a dbfs path escapes the dbfs_root.
+        """
         if path.startswith("dbfs:/"):
             suffix = path[len("dbfs:/") :].lstrip("/")
             target = (self._config.dbfs_root / suffix).resolve()
@@ -167,6 +305,14 @@ class LocalFs(_HelpMixin):
         return Path(path).expanduser().resolve()
 
     def ls(self, dir: str) -> List[FileInfo]:
+        """List contents of a directory.
+
+        Args:
+            dir (str): Directory path.
+
+        Returns:
+            List[FileInfo]: List of file information.
+        """
         p = self._resolve(dir)
         items = list(p.iterdir()) if p.is_dir() else [p]
         out: List[FileInfo] = []
@@ -182,7 +328,28 @@ class LocalFs(_HelpMixin):
             )
         return out
 
-    def cp(self, from_: Optional[str] = None, to: Optional[str] = None, recurse: bool = False, **kwargs) -> bool:
+    def cp(
+        self,
+        from_: Optional[str] = None,
+        to: Optional[str] = None,
+        recurse: bool = False,
+        **kwargs,
+    ) -> bool:
+        """Copy a file or directory.
+
+        Args:
+            from_ (Optional[str]): Source path.
+            to (Optional[str]): Destination path.
+            recurse (bool): Whether to copy recursively.
+            **kwargs: Support for 'from' keyword.
+
+        Returns:
+            bool: True if successful.
+
+        Raises:
+            TypeError: If source or destination is missing.
+            ValueError: If source is a directory but recurse is False.
+        """
         if from_ is None and "from" in kwargs:
             from_ = kwargs["from"]
         if to is None and "to" in kwargs:
@@ -200,7 +367,27 @@ class LocalFs(_HelpMixin):
             shutil.copy2(src, dst)
         return True
 
-    def mv(self, from_: Optional[str] = None, to: Optional[str] = None, recurse: bool = False, **kwargs) -> bool:
+    def mv(
+        self,
+        from_: Optional[str] = None,
+        to: Optional[str] = None,
+        recurse: bool = False,
+        **kwargs,
+    ) -> bool:
+        """Move a file or directory.
+
+        Args:
+            from_ (Optional[str]): Source path.
+            to (Optional[str]): Destination path.
+            recurse (bool): Ignored.
+            **kwargs: Support for 'from' keyword.
+
+        Returns:
+            bool: True if successful.
+
+        Raises:
+            TypeError: If source or destination is missing.
+        """
         if from_ is None and "from" in kwargs:
             from_ = kwargs["from"]
         if to is None and "to" in kwargs:
@@ -215,6 +402,15 @@ class LocalFs(_HelpMixin):
         return True
 
     def rm(self, dir: str, recurse: bool = False) -> bool:
+        """Remove a file or directory.
+
+        Args:
+            dir (str): Path to remove.
+            recurse (bool): Whether to remove recursively.
+
+        Returns:
+            bool: True if successful.
+        """
         p = self._resolve(dir)
         if p.is_dir():
             if recurse:
@@ -226,15 +422,45 @@ class LocalFs(_HelpMixin):
         return True
 
     def mkdirs(self, dir: str) -> bool:
+        """Create directories recursively.
+
+        Args:
+            dir (str): Directory path.
+
+        Returns:
+            bool: True if successful.
+        """
         self._resolve(dir).mkdir(parents=True, exist_ok=True)
         return True
 
     def head(self, file: str, max_bytes: int = 65536) -> str:
+        """Read the beginning of a file.
+
+        Args:
+            file (str): File path.
+            max_bytes (int): Maximum bytes to read.
+
+        Returns:
+            str: Content of the file.
+        """
         p = self._resolve(file)
         with p.open("r", encoding="utf-8") as f:
             return f.read(max_bytes)
 
     def put(self, file: str, contents: str, overwrite: bool = False) -> bool:
+        """Write a string to a file.
+
+        Args:
+            file (str): File path.
+            contents (str): Content to write.
+            overwrite (bool): Whether to overwrite if file exists.
+
+        Returns:
+            bool: True if successful.
+
+        Raises:
+            FileExistsError: If file exists and overwrite is False.
+        """
         p = self._resolve(file)
         p.parent.mkdir(parents=True, exist_ok=True)
         if p.exists() and not overwrite:
@@ -251,12 +477,25 @@ class LocalFs(_HelpMixin):
         owner: Optional[str] = None,
         extraConfigs: Optional[Dict[str, str]] = None,
     ) -> bool:
+        """Mount a source to a DBFS mount point.
+
+        Args:
+            source (str): Source path.
+            mountPoint (str): DBFS mount point.
+            encryptionType (str): Encryption type.
+            owner (Optional[str]): Owner.
+            extraConfigs (Optional[Dict[str, str]]): Extra configurations.
+
+        Returns:
+            bool: True if successful.
+
+        Raises:
+            ValueError: If mount point already exists.
+        """
         del owner, extraConfigs
         if mountPoint in self._mounts:
             raise ValueError("Mount point already exists")
-        self._mounts[mountPoint] = MountInfo(
-            mountPoint=mountPoint, source=source, encryptionType=encryptionType
-        )
+        self._mounts[mountPoint] = MountInfo(mountPoint=mountPoint, source=source, encryptionType=encryptionType)
         return True
 
     def updateMount(
@@ -267,21 +506,55 @@ class LocalFs(_HelpMixin):
         owner: Optional[str] = None,
         extraConfigs: Optional[Dict[str, str]] = None,
     ) -> bool:
+        """Update an existing mount point.
+
+        Args:
+            source (str): Source path.
+            mountPoint (str): DBFS mount point.
+            encryptionType (str): Encryption type.
+            owner (Optional[str]): Owner.
+            extraConfigs (Optional[Dict[str, str]]): Extra configurations.
+
+        Returns:
+            bool: True if successful.
+
+        Raises:
+            ValueError: If mount point does not exist.
+        """
         del owner, extraConfigs
         if mountPoint not in self._mounts:
             raise ValueError("Mount point does not exist")
-        self._mounts[mountPoint] = MountInfo(
-            mountPoint=mountPoint, source=source, encryptionType=encryptionType
-        )
+        self._mounts[mountPoint] = MountInfo(mountPoint=mountPoint, source=source, encryptionType=encryptionType)
         return True
 
     def mounts(self) -> List[MountInfo]:
+        """List current mounts.
+
+        Returns:
+            List[MountInfo]: List of mount information.
+        """
         return list(self._mounts.values())
 
     def refreshMounts(self) -> bool:
+        """Refresh mounts (no-op in local).
+
+        Returns:
+            bool: True.
+        """
         return True
 
     def unmount(self, mountPoint: str) -> bool:
+        """Unmount a DBFS mount point.
+
+        Args:
+            mountPoint (str): DBFS mount point.
+
+        Returns:
+            bool: True if successful.
+
+        Raises:
+            ValueError: If mount point does not exist.
+        """
         if mountPoint not in self._mounts:
             raise ValueError("Mount point does not exist")
         del self._mounts[mountPoint]
@@ -289,15 +562,43 @@ class LocalFs(_HelpMixin):
 
 
 class LocalNotebook(_HelpMixin):
+    """Local implementation of dbutils.notebook."""
+
     _COMMANDS = {
         "exit": "Exits a notebook with a value.",
         "run": "Runs a notebook and returns its exit value.",
     }
 
     def exit(self, value: str) -> None:
+        """Exit the notebook with a value.
+
+        Args:
+            value (str): Exit value.
+
+        Raises:
+            NotebookExit: Always raised to simulate notebook exit.
+        """
         raise NotebookExit(value)
 
-    def run(self, path: str, timeoutSeconds: int, arguments: Optional[Dict[str, str]] = None) -> str:
+    def run(
+        self,
+        path: str,
+        timeoutSeconds: int,
+        arguments: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Run a notebook (not implemented in local).
+
+        Args:
+            path (str): Notebook path.
+            timeoutSeconds (int): Timeout in seconds.
+            arguments (Optional[Dict[str, str]]): Notebook arguments.
+
+        Returns:
+            str: Exit value.
+
+        Raises:
+            NotImplementedError: Always raised as notebook.run is not supported locally.
+        """
         del timeoutSeconds, arguments
         raise NotImplementedError(
             f"Local notebook.run is not implemented for path '{path}'. Use your orchestrator in local mode."
@@ -305,6 +606,8 @@ class LocalNotebook(_HelpMixin):
 
 
 class LocalTaskValues(_HelpMixin):
+    """Local implementation of dbutils.jobs.taskValues."""
+
     _COMMANDS = {
         "get": "Gets the task value for a given task key and value key.",
         "set": "Sets or updates a task value.",
@@ -321,6 +624,20 @@ class LocalTaskValues(_HelpMixin):
         default: Optional[Any] = None,
         debugValue: Optional[Any] = None,
     ) -> Any:
+        """Get a task value.
+
+        Args:
+            taskKey (str): Task key.
+            key (str): Value key.
+            default (Optional[Any]): Default value if key is not found.
+            debugValue (Optional[Any]): Debug value if taskKey is not found.
+
+        Returns:
+            Any: The task value.
+
+        Raises:
+            ValueError: If task or key is not found and no default/debugValue provided.
+        """
         if taskKey not in self._store:
             if debugValue is not None:
                 return debugValue
@@ -332,11 +649,22 @@ class LocalTaskValues(_HelpMixin):
         return self._store[taskKey][key]
 
     def set(self, key: str, value: Any) -> bool:
+        """Set a task value.
+
+        Args:
+            key (str): Value key.
+            value (Any): Value to set.
+
+        Returns:
+            bool: True.
+        """
         self._store.setdefault(self._current_task_key, {})[key] = value
         return True
 
 
 class LocalJobs(_HelpMixin):
+    """Local implementation of dbutils.jobs."""
+
     _COMMANDS = {"taskValues": "Utilities for leveraging job task values."}
 
     def __init__(self):
@@ -345,22 +673,29 @@ class LocalJobs(_HelpMixin):
 
 class _UnsupportedModule(_HelpMixin):
     def __init__(self, module_name: str, commands: Dict[str, str]):
+        """Initialize an unsupported module.
+
+        Args:
+            module_name (str): Name of the module.
+            commands (Dict[str, str]): Commands that are theoretically supported by this module.
+        """
         self._module_name = module_name
         self._COMMANDS = commands
 
     def __getattr__(self, item: str):
         if item in self._COMMANDS:
+
             def _call(*args, **kwargs):
                 del args, kwargs
-                raise NotImplementedError(
-                    f"dbutils.{self._module_name}.{item} is not supported in local adapter yet."
-                )
+                raise NotImplementedError(f"dbutils.{self._module_name}.{item} is not supported in local adapter yet.")
 
             return _call
         raise AttributeError(item)
 
 
 class LocalDbutils(_HelpMixin):
+    """Local implementation of dbutils."""
+
     _COMMANDS = {
         "credentials": "Utilities for interacting with credentials within notebooks.",
         "data": "Utilities for understanding and interacting with datasets.",
@@ -385,7 +720,7 @@ class LocalDbutils(_HelpMixin):
             "credentials",
             {
                 "assumeRole": "Sets the role ARN to assume.",
-                "getServiceCredentialsProvider": "Returns service credentials provider.",
+                "getServiceCredentialsProvider": ("Returns service credentials provider."),
                 "showCurrentRole": "Shows currently set role.",
                 "showRoles": "Shows set of possible assumed roles.",
             },

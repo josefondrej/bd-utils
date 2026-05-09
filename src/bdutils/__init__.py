@@ -1,8 +1,12 @@
 from bdutils.config import BdUtilsConfig
 from bdutils.core import get_dbutils
 
+"""bdutils: A library for local Databricks-like dbutils.
+"""
+
 # Default singleton, mirroring Databricks notebook ergonomics.
 dbutils = get_dbutils()
+
 
 def __getattr__(name: str):
     # Allow direct module usage: import bdutils; bdutils.fs.ls(...)
