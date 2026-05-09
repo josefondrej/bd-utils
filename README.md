@@ -56,3 +56,7 @@ This runs:
 
 - `dbfs:/...` paths are mapped to `~/.bd-utils/dbfs/...` by default.
 - Unsupported methods raise `NotImplementedError`.
+
+## License
+
+MIT

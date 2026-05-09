@@ -7,8 +7,17 @@ name = "bd-utils"
 version = "0.1.1"
 description = "Databricks dbutils-compatible adapter for local and Databricks runtimes."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "bd-utils contributors" }]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = []
 
 [project.optional-dependencies]
