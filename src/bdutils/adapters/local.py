@@ -300,8 +300,12 @@ class LocalFs(_HelpMixin):
             if not str(target).startswith(str(dbfs_root)):
                 raise ValueError("dbfs path escapes configured dbfs_root.")
             return target
-        if path.startswith("file:/"):
-            return Path(path[len("file:/") :]).resolve()
+        if path.startswith("file:"):
+            # Handle both file:/path and file:path
+            suffix = path[len("file:") :]
+            if suffix.startswith("//"):  # Handle file:///path
+                suffix = suffix[2:]
+            return Path(suffix).expanduser().resolve()
         return Path(path).expanduser().resolve()
 
     def ls(self, dir: str) -> List[FileInfo]:
