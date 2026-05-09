@@ -688,12 +688,7 @@ class _UnsupportedModule(_HelpMixin):
 
     def __getattr__(self, item: str):
         if item in self._COMMANDS:
-
-            def _call(*args, **kwargs):
-                del args, kwargs
-                raise NotImplementedError(f"dbutils.{self._module_name}.{item} is not supported in local adapter yet.")
-
-            return _call
+            raise NotImplementedError(f"dbutils.{self._module_name}.{item} is not supported in local adapter yet.")
         raise AttributeError(item)
 
 
@@ -715,22 +710,14 @@ class LocalDbutils(_HelpMixin):
     }
 
     def __init__(self, config: BdUtilsConfig):
+        self._config = config
         self.widgets = LocalWidgets(config)
         self.secrets = LocalSecrets(config)
         self.fs = LocalFs(config)
         self.notebook = LocalNotebook()
         self.jobs = LocalJobs()
-        self.credentials = _UnsupportedModule(
-            "credentials",
-            {
-                "assumeRole": "Sets the role ARN to assume.",
-                "getServiceCredentialsProvider": ("Returns service credentials provider."),
-                "showCurrentRole": "Shows currently set role.",
-                "showRoles": "Shows set of possible assumed roles.",
-            },
-        )
-        self.data = _UnsupportedModule("data", {"summarize": "Summarizes a DataFrame."})
-        self.library = _UnsupportedModule("library", {"restartPython": "Restarts Python process."})
-        self.meta = _UnsupportedModule("meta", {})
-        self.preview = _UnsupportedModule("preview", {})
-        self.api = _UnsupportedModule("api", {})
+
+    def __getattr__(self, name: str):
+        if name in ["credentials", "data", "library", "meta", "preview", "api", "FileInfo"]:
+            raise NotImplementedError(f"dbutils.{name} is not supported in local adapter yet.")
+        raise AttributeError(name)
